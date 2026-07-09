@@ -1,0 +1,11 @@
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: two-tier-cluster
+nodes:
+  - role: control-plane
+    extraPortMappings:
+      - containerPort: 30036   # ye flask-service.yaml ke nodePort se match hona chahiye
+        hostPort: 30036
+        protocol: TCP
+  - role: worker
+  - role: worker
