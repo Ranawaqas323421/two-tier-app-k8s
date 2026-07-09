@@ -1,91 +1,138 @@
- 
-# Two-Tier Flask App with MySQL
+# Two-Tier Flask + MySQL Application on Kubernetes
 
-This is a simple Flask app that interacts with a MySQL database. The app allows users to submit messages, which are then stored in the database and displayed on the frontend.
+A two-tier web application deployed on a Kubernetes (KIND) cluster, demonstrating containerization, orchestration, and DevOps deployment practices. The application consists of a Python Flask frontend/backend service connected to a MySQL database, both running as separate deployments and exposed via Kubernetes Services.
+
+## Architecture
+
+```
+                        ┌─────────────────────────┐
+   Browser  ── :30036 ─▶│   flask-service          │
+                        │   (NodePort)             │
+                        └───────────┬──────────────┘
+                                    │
+                        ┌───────────▼──────────────┐
+                        │   flask-deployment        │
+                        │   (2 replicas)            │
+                        └───────────┬──────────────┘
+                                    │
+                        ┌───────────▼──────────────┐
+                        │   mysql-service            │
+                        │   (ClusterIP)              │
+                        └───────────┬──────────────┘
+                                    │
+                        ┌───────────▼──────────────┐
+                        │   mysql-deployment         │
+                        │   (1 replica)              │
+                        └───────────────────────────┘
+```
+
+## Tech Stack
+
+- **Frontend/Backend:** Python Flask
+- **Database:** MySQL 8.0
+- **Containerization:** Docker
+- **Orchestration:** Kubernetes (KIND cluster)
+- **Hosting:** AWS EC2
+- **Image Registry:** DockerHub
+
+## Repository Structure
+
+```
+two-tier-app-k8s/
+├── app.py                     # Flask application
+├── requirements.txt           # Python dependencies
+├── Dockerfile                 # Container build instructions
+├── message.sql                # (optional) manual DB seed script
+├── K8s-manifests/
+│   ├── flask-deployment.yaml
+│   ├── flask-service.yaml
+│   ├── mysql-deployment.yaml
+│   └── mysql-service.yaml
+├── kind-config.yaml            # KIND cluster configuration
+└── README.md
+```
 
 ## Prerequisites
 
-Before you begin, make sure you have the following installed:
+- Docker
+- kubectl
+- KIND (`kind`)
+- An AWS EC2 instance (or any Linux host) with Docker installed
 
-- Git (optional, for cloning the repository)
-- EC2 insatnce
+## Setup & Deployment
 
-## Setup
+### 1. Clone the repository
 
-1. Clone this repository (if you haven't already):
+```bash
+git clone https://github.com/Ranawaqas323421/two-tier-app-k8s.git
+cd two-tier-app-k8s
+```
 
-   ```bash
-   git clone https://github.com/your-username/your-repo-name.git
-   ```
+### 2. Build and push the Docker image
 
-2. Navigate to the project directory:
+```bash
+docker build -t waqas323421/two-tier-app:v1 .
+docker login
+docker push waqas323421/two-tier-app:v1
+```
 
-   ```bash
-   cd your-repo-name
-   ```
+### 3. Create the KIND cluster
 
-3. Create a `.env` file in the project directory to store your MySQL environment variables:
+```bash
+kind create cluster --config kind-config.yaml
+```
 
-   ```bash
-   touch .env
-   ```
+### 4. Create the MySQL secret
 
-4. Open the `.env` file and add your MySQL configuration:
+```bash
+kubectl create secret generic mysql-secret \
+  --from-literal=MYSQL_ROOT_PASSWORD=<your-password> \
+  --from-literal=MYSQL_USER=<your-user> \
+  --from-literal=MYSQL_PASSWORD=<your-password>
+```
 
-   ```
-   MYSQL_HOST=mysql
-   MYSQL_USER=your_username
-   MYSQL_PASSWORD=your_password
-   MYSQL_DB=your_database
-   ```
+### 5. Apply the Kubernetes manifests
 
-## Usage
+```bash
+cd K8s-manifests
+kubectl apply -f .
+```
 
-1. Update System and Install Required Packages:
+### 6. Verify the deployment
 
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   sudo apt install python3-pip python3-venv mysql-server -y
+```bash
+kubectl get pods
+kubectl get svc
+```
 
-   ```
+Both `flask-deployment` and `mysql-deployment` pods should show `1/1 Running`.
 
-2. Access the Flask app in your web browser:
- ```bash
-   - http://ec2-instance_ip:5000
-   ```
+### 7. Access the application
 
-3. Create the `messages` table in your MySQL database:
+```
+http://<EC2-public-ip>:30036
+```
 
-   - Use a MySQL client or tool (e.g., phpMyAdmin) to execute the following SQL commands:
-   
-     ```sql
-     CREATE TABLE messages (
-         id INT AUTO_INCREMENT PRIMARY KEY,
-         message TEXT
-     );
-     ```
-4. Run the Flask App:
+Make sure port `30036` is open in your EC2 security group's inbound rules.
 
-   ```bash
-   python app.py --host=0.0.0.0 --port=5000
+## Useful Commands
 
-   ```
-5. Interact with the app:
+| Purpose                          | Command                                                    |
+|-----------------------------------|-------------------------------------------------------------|
+| View pod logs                     | `kubectl logs <pod-name>`                                   |
+| Describe a pod (debug)            | `kubectl describe pod <pod-name>`                            |
+| Restart a deployment              | `kubectl rollout restart deployment flask-deployment`        |
+| Update image on a running deploy  | `kubectl set image deployment/flask-deployment flask-app=<new-image>` |
+| Port-forward for local testing    | `kubectl port-forward svc/flask-service 5000:5000 --address 0.0.0.0` |
+| Delete the cluster                | `kind delete cluster --name two-tier-cluster`                |
 
-   - Visit http://ec2-instance-ip to see the frontend. You can submit new messages using the form.
+## Troubleshooting
 
+- **ImagePullBackOff** — Verify the image name/tag in `flask-deployment.yaml` matches what was pushed to DockerHub.
+- **CreateContainerConfigError** — Usually means the `mysql-secret` hasn't been created yet.
+- **App not reachable externally** — Check the EC2 security group allows inbound traffic on the NodePort, and confirm the KIND `extraPortMappings` in `kind-config.yaml` match the service's NodePort.
 
-## Notes
+## Author
 
-- Make sure to replace placeholders (e.g., `your_username`, `your_password`, `your_database`) with your actual MySQL configuration.
-
-- This is a basic setup for demonstration purposes. In a production environment, you should follow best practices for security and performance.
-
-- Be cautious when executing SQL queries directly. Validate and sanitize user inputs to prevent vulnerabilities like SQL injection.
-
-##  Notes License
-<pre>This project is open-source and available under the MIT License.</pre>
-
-## 📬 Contact
-<pre>For questions, feedback, or contributions, feel free to open an issue or submit a pull request.</pre>
-
+**Waqas Saleem**
+GitHub: [Ranawaqas323421](https://github.com/Ranawaqas323421)
